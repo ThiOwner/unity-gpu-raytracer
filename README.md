@@ -1,6 +1,6 @@
 # Custom GPU Ray Tracer in Unity
 
-![Ray Tracing Render Preview](Media/render_preview.jpg)
+![Ray Tracing Render Preview](Media/render_preview.png)
 
 A GPU-accelerated Ray Tracer built from scratch in **Unity** using **HLSL Compute Shaders** and C#. This project explores core graphics programming concepts, geometry-ray intersections, and progressive sampling techniques without relying on Unity's built-in pipeline lighting systems.
 
