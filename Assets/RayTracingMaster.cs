@@ -92,10 +92,8 @@ public class RayTracingMaster : MonoBehaviour
         RayTracingShader.SetMatrix("_CameraInverseProjection", _camera.projectionMatrix.inverse);
         RayTracingShader.SetTexture(0, "_SkyboxTexture", SkyboxTexture);
         RayTracingShader.SetVector("_PixelOffset", new Vector2(Random.value, Random.value));
-
          Vector3 l = _DirectionalLight.transform.forward;
         RayTracingShader.SetVector("_DirectionalLight", new Vector4(l.x,l.y,l.z,_DirectionalLight.intensity));
-
         RayTracingShader.SetBuffer(0, "_Spheres", _sphereBuffer);
     }
 

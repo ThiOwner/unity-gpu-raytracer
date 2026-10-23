@@ -16,9 +16,10 @@ public class FreeCamera : MonoBehaviour
     private Vector3 _movement;
     private Vector3 _mouseDelta;
 
+    private int _warmupFrames = 5;
     private float _pitch = 0f;
     private float _yaw = 0f;
-
+    
     private void OnEnable(){
         inputActions.FindActionMap("FreeCamera").Enable();
     }
@@ -32,6 +33,11 @@ public class FreeCamera : MonoBehaviour
         _lookAction = inputActions.FindActionMap("FreeCamera").FindAction("Look");
         _screenshotAction = inputActions.FindActionMap("FreeCamera").FindAction("Screenshot");
         _camera = GetComponent<Camera>();
+
+        // Initialize the actual rotation of the camera
+        Vector3 angles = transform.eulerAngles;
+        _yaw = angles.y;
+        _pitch = NormalizeAngle(angles.x);
     }
 
     private void Start(){
@@ -43,11 +49,17 @@ public class FreeCamera : MonoBehaviour
         if (_lookAction != null){
             Vector2 lookDelta = _lookAction.ReadValue<Vector2>();
 
-            _yaw += lookDelta.x * sensitivity;
-            _pitch -= lookDelta.y * sensitivity;
-            _pitch = Mathf.Clamp(_pitch, -89f, 89f);
+            if (_warmupFrames > 0){
+                _warmupFrames--;
+                lookDelta = Vector2.zero;
+            }
 
-            transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+            if (lookDelta != Vector2.zero){
+                _yaw += lookDelta.x * sensitivity;
+                _pitch -= lookDelta.y * sensitivity;
+                _pitch = Mathf.Clamp(_pitch, -89f, 89f);
+                transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+            }
         }
 
         if (_moveAction != null){
@@ -64,7 +76,11 @@ public class FreeCamera : MonoBehaviour
 
     private void TakeScreenshot(){
         string fileName = "Screenshot_" + System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".png";
-        ScreenCapture.CaptureScreenshot(fileName);
-        Debug.Log("Screenshot saves : " + fileName);
+        ScreenCapture.CaptureScreenshot("Media/" + fileName);
+        Debug.Log("Screenshot saves : Media/" + fileName);
+    }
+
+    private static float NormalizeAngle(float angle){
+        return angle > 180f ? angle - 360f : angle;
     }
 }
