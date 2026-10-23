@@ -11,6 +11,7 @@ public class FreeCamera : MonoBehaviour
     
     private InputAction _moveAction;
     private InputAction _lookAction;
+    private InputAction _screenshotAction;
 
     private Vector3 _movement;
     private Vector3 _mouseDelta;
@@ -29,6 +30,7 @@ public class FreeCamera : MonoBehaviour
     private void Awake(){
         _moveAction = inputActions.FindActionMap("FreeCamera").FindAction("Move");
         _lookAction = inputActions.FindActionMap("FreeCamera").FindAction("Look");
+        _screenshotAction = inputActions.FindActionMap("FreeCamera").FindAction("Screenshot");
         _camera = GetComponent<Camera>();
     }
 
@@ -54,5 +56,15 @@ public class FreeCamera : MonoBehaviour
             
             transform.position += direction * speed * Time.deltaTime;
         }
+
+        if (_screenshotAction != null && _screenshotAction.WasPressedThisFrame()){
+            TakeScreenshot();
+        }
+    }
+
+    private void TakeScreenshot(){
+        string fileName = "Screenshot_" + System.DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".png";
+        ScreenCapture.CaptureScreenshot(fileName);
+        Debug.Log("Screenshot saves : " + fileName);
     }
 }

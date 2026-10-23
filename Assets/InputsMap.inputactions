@@ -23,6 +23,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": true
+                },
+                {
+                    "name": "Screenshot",
+                    "type": "Button",
+                    "id": "561cfe7e-f46f-4613-924e-ea557d6c0c01",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -111,6 +120,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "1ba8bc0c-9fa0-4f94-91bd-8aca579b89e8",
+                    "path": "<Keyboard>/f10",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Screenshot",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
