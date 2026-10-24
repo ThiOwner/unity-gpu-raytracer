@@ -1,100 +1,76 @@
 using UnityEngine;
-using System.Collections.Generic;
 
-public class RayTracingMaster : MonoBehaviour
-{
+public class RayTracingSystem : MonoBehaviour {
+    
+    struct Vertex {
+        public Vector3 position;
+        public Vector3 normal;
+    }
+
+    struct Triangle {
+        public int i0, i1, i2;
+    }
+    
     public ComputeShader RayTracingShader;
     public Texture SkyboxTexture;
-    public Light _DirectionalLight;
 
     private uint _currentSample = 0;
     private Material _addMaterial;
     private RenderTexture _target;
     private Camera _camera;
-    
-    public Vector2 SphereRadius = new Vector2(3.0f, 8.0f);
-    public uint SpheresMax = 1000;
-    public float SpherePlacementRadius = 50.0f;
-    private ComputeBuffer _sphereBuffer;
 
-    struct Sphere{
-        public float radius;
-        public Vector3 position;
-        public Vector3 albedo;
-        public Vector3 specular;
-    }
+    private ComputeBuffer _vertexBuffer;
+    private ComputeBuffer _triangleBuffer;
 
     private void OnEnable(){
         SetUpScene();
     }
 
     private void OnDisable(){
-        if (_sphereBuffer != null) _sphereBuffer.Release();
+        if (_vertexBuffer != null) _vertexBuffer.Release();
+        if (_triangleBuffer != null) _triangleBuffer.Release();
     }
 
-    private void Awake(){
+    private void Awake() {
         _camera = GetComponent<Camera>();
     }
 
-    private void Update(){
+    private void Update() {
         if(transform.hasChanged){
             _currentSample = 0;
             transform.hasChanged = false;
         }
-
-        if(_DirectionalLight.transform.hasChanged){
-            Vector3 l = _DirectionalLight.transform.forward;
-            RayTracingShader.SetVector("_DirectionalLight", new Vector4(l.x,l.y,l.z,_DirectionalLight.intensity));
-            _currentSample = 0;
-            _DirectionalLight.transform.hasChanged = false;
-        }
     }
 
     private void SetUpScene(){
-        List<Sphere> spheres = new List<Sphere>();
+        if (_vertexBuffer != null) _vertexBuffer.Release();
+        if (_triangleBuffer != null) _triangleBuffer.Release();
 
-        // Add a number of random spheres
-        for (int i = 0; i < SpheresMax; i++){
-            Sphere sphere = new Sphere();
+        // Hello Triangle
+        Vertex[] vertices = {
+            new Vertex { position = new Vector3(-1f, -1f, 5f), normal = Vector3.back },
+            new Vertex { position = new Vector3( 0f,  1f, 5f), normal = Vector3.back },
+            new Vertex { position = new Vector3( 1f, -1f, 5f), normal = Vector3.back },
+        };
 
-            // Radius and radius
-            sphere.radius = SphereRadius.x + Random.value * (SphereRadius.y - SphereRadius.x);
-            Vector2 randomPos = Random.insideUnitCircle * SpherePlacementRadius;
-            sphere.position = new Vector3(randomPos.x, sphere.radius, randomPos.y);
+        Triangle[] triangles = {
+            new Triangle { i0 = 0, i1 = 1, i2 = 2 },
+        };
 
-            // Reject spheres that are intersecting others
-            foreach (Sphere other in spheres){
-                float minDist = sphere.radius + other.radius;
-                if (Vector3.SqrMagnitude(sphere.position - other.position) < minDist * minDist)
-                goto SkipSphere;
-            }
+        _vertexBuffer = new ComputeBuffer(vertices.Length, sizeof(float) * 6);
+        _vertexBuffer.SetData(vertices);
 
-            // Albedo and specular color
-            Color color = Random.ColorHSV();
-            bool metal = Random.value < 0.5f;
-            sphere.albedo = metal ? Vector3.zero : new Vector3(color.r, color.g, color.b);
-            sphere.specular = metal ? new Vector3(color.r, color.g, color.b) : Vector3.one * 0.04f;
-
-            // Add the sphere to the list
-            spheres.Add(sphere);
-
-            SkipSphere:
-            continue;
-        }
-
-        // Assign to compute buffer
-        _sphereBuffer = new ComputeBuffer(spheres.Count, 40);
-        _sphereBuffer.SetData(spheres);
+        _triangleBuffer = new ComputeBuffer(triangles.Length, sizeof(int) * 3);
+        _triangleBuffer.SetData(triangles);
     }
 
     private void SetShaderParameters(){
         RayTracingShader.SetMatrix("_CameraToWorld", _camera.cameraToWorldMatrix);
         RayTracingShader.SetMatrix("_CameraInverseProjection", _camera.projectionMatrix.inverse);
+        RayTracingShader.SetInt("_TriangleCount", _triangleBuffer.count);
         RayTracingShader.SetTexture(0, "_SkyboxTexture", SkyboxTexture);
-        RayTracingShader.SetVector("_PixelOffset", new Vector2(Random.value, Random.value));
-         Vector3 l = _DirectionalLight.transform.forward;
-        RayTracingShader.SetVector("_DirectionalLight", new Vector4(l.x,l.y,l.z,_DirectionalLight.intensity));
-        RayTracingShader.SetBuffer(0, "_Spheres", _sphereBuffer);
+        RayTracingShader.SetBuffer(0, "_Vertices", _vertexBuffer);
+        RayTracingShader.SetBuffer(0, "_Triangles", _triangleBuffer);
     }
 
     // Automatically called by Unity whenever the camera has finished rendering.

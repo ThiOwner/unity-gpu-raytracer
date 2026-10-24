@@ -8,129 +8,114 @@ float4x4 _CameraInverseProjection;
 Texture2D _SkyboxTexture;
 SamplerState sampler_SkyboxTexture;
 
-float2 _PixelOffset;
-float4 _DirectionalLight;
-
-static const float PI = 3.14159265;
-
-struct Sphere {
-    float radius;
+struct Vertex {
     float3 position;
-    float3 albedo;
-    float3 specular;
+    float3 normal;
 };
-StructuredBuffer<Sphere> _Spheres;
+
+struct Triangle {
+    int3 indices;
+};
+
+StructuredBuffer<Vertex> _Vertices;
+StructuredBuffer<Triangle> _Triangles;
+int _TriangleCount;
+
+static const float INF = 1e30f;
+static const float EPSILON = 1e-6f;
+static const float PI = 3.14159265f;
 
 struct Ray {
     float3 origin;
     float3 direction;
-    float3 energy;
 };
 
 struct RayHit {
     float3 position;
-    float distance;
     float3 normal;
-    float3 albedo;
-    float3 specular;
+    float distance;
+    bool didHit;
 };
 
 Ray CreateRay(float3 origin, float3 direction){
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
-    ray.energy = float3(1.0f,1.0f,1.0f);
     return ray;
+}
+
+RayHit CreateRayHit(){
+    RayHit hit;
+    hit.normal = float3(0.0f,0.0f,0.0f);
+    hit.position = float3(0.0f,0.0f,0.0f);
+    hit.distance = INF;
+    hit.didHit = false;
+    return hit;
 }
 
 Ray CreateCameraRay(float2 uv){
     // Transform the camera origin to world space
-    float3 origin = mul(_CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+    float3 origin = mul(_CameraToWorld, float4(0.0f,0.0f,0.0f,1.0f)).xyz;
 
     // Invert the perspective projection of the view-space position
-    float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz;
+    float3 direction = mul(_CameraInverseProjection, float4(uv,0.0f,1.0f)).xyz;
 
     // Transform the direction from camera to world space and normalize
-    direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
+    direction = mul(_CameraToWorld, float4(direction,0.0f)).xyz;
     direction = normalize(direction);
 
-    return CreateRay(origin, direction);
+    return CreateRay(origin,direction);
 }
 
-RayHit CreateRayHit() {
-    RayHit hit;
-    hit.distance = 1.#INF;
-    hit.normal = float3(0.0f, 0.0f, 0.0f);
-    hit.albedo = float3(0.0f, 0.0f, 0.0f);
-    hit.position = float3(0.0f, 0.0f, 0.0f);
-    hit.specular = float3(0.0f, 0.0f, 0.0f);
-    return hit;
-}
+// Möller-Trumbore algorithme
+void IntersectTriangle(Ray ray, inout RayHit bestHit, Triangle tri){
+    Vertex v0 = _Vertices[tri.indices.x];
+    Vertex v1 = _Vertices[tri.indices.y];
+    Vertex v2 = _Vertices[tri.indices.z];
 
-void IntersectGroundPlane(Ray ray, inout RayHit bestHit) {
-    // Calculate distance along the ray where the ground plane is intersected
-    float t = -ray.origin.y / ray.direction.y;
-    if (t > 0 && t < bestHit.distance) {
+    float3 e1 = v1.position - v0.position;
+    float3 e2 = v2.position - v0.position;
+
+    float3 h = cross(ray.direction,e2);
+    float a = dot(e1,h);
+    if(a > -EPSILON && a < EPSILON) return; // The ray and the triangle are parallel
+
+    float f = 1.0/a;
+    float3 s = ray.origin-v0.position;
+    float u = f*(dot(s,h));
+    if (u < 0.0 || u > 1.0) return;
+
+    float3 q = cross(s,e1);
+    float v = f*(dot(ray.direction,q));
+    if (v < 0.0 || u+v > 1.0) return;
+
+    // Computing t
+    float t = f*dot(e2,q);
+    if (t > EPSILON && bestHit.distance > t){
         bestHit.distance = t;
-        bestHit.position = ray.origin + t * ray.direction;
-        bestHit.normal = float3(0.0f, 1.0f, 0.0f);
-        bestHit.specular = float3(0.6f, 0.6f, 0.6f);
-        bestHit.albedo = float3(0.8f,0.8f,0.8f);
-    }
+        bestHit.position = ray.origin + ray.direction * t;
+        
+        float w = 1.0f - u - v;
+        bestHit.normal = normalize(w * v0.normal + u * v1.normal + v * v2.normal);
+        
+        bestHit.didHit = true;
+        return;
+    } 
+    else 
+        return;
 }
 
-void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere) {
-    // Calculate distance along the ray where the sphere is intersected
-    float3 d = ray.origin - sphere.position;
-    float p1 = -dot(ray.direction, d);
-    float p2sqr = p1 * p1 - dot(d, d) + sphere.radius * sphere.radius;
-    if (p2sqr < 0) return;
-
-    float p2 = sqrt(p2sqr);
-    float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
-
-    if (t > 0 && t < bestHit.distance){
-        bestHit.distance = t;
-        bestHit.position = ray.origin + t * ray.direction;
-        bestHit.normal = normalize(bestHit.position - sphere.position);
-        bestHit.albedo = sphere.albedo;
-        bestHit.specular = sphere.specular;
-    }
+RayHit Trace(Ray ray){
+    RayHit best = CreateRayHit();
+    for (int i = 0; i < _TriangleCount; i++) IntersectTriangle(ray, best, _Triangles[i]);
+    return best;
 }
 
-RayHit Trace(Ray ray) {
-    RayHit bestHit = CreateRayHit();
-
-    // Trace spheres
-    uint numSpheres, stride;
-    _Spheres.GetDimensions(numSpheres, stride);
-    for (uint i = 0; i < numSpheres; i++)
-    IntersectSphere(ray, bestHit, _Spheres[i]);
-
-    IntersectGroundPlane(ray, bestHit);
-    return bestHit;
-}
-
-float3 Shade(inout Ray ray, RayHit hit) {
-    if (hit.distance < 1.#INF){
-        // Reflect the ray and multiply energy with specular reflection
-        ray.origin = hit.position + hit.normal * 0.001f;
-        ray.direction = reflect(ray.direction, hit.normal);
-        ray.energy *= hit.specular;
-
-        // Shadow test ray
-        Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz);
-        RayHit shadowHit = Trace(shadowRay);
-        if (shadowHit.distance != 1.#INF){
-            return float3(0.0f, 0.0f, 0.0f);
-        }
-
-        // Return a diffuse-shaded color
-        return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * hit.albedo;
+float3 Shade(inout Ray ray, RayHit hit){
+    if (hit.didHit){
+        //  Red color for testing
+        return float3(1.0f,0.0f,0.0f);
     } else {
-        // Erase the ray's energy - the sky doesn't reflect anything
-        ray.energy = 0.0f;
-
         // Sample the skybox and write it
         float theta = acos(ray.direction.y) / -PI;
         float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
@@ -139,26 +124,21 @@ float3 Shade(inout Ray ray, RayHit hit) {
 }
 
 [numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID){
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
     // Get the dimensions of the RenderTexture
     uint width, height;
     Result.GetDimensions(width, height);
 
     // Transform pixel to [-1, 1] range
-    float2 uv = float2((id.xy + _PixelOffset) / float2(width, height) * 2.0f - 1.0f);
+    float2 uv = float2((id.xy + float2(0.5f, 0.5f)) / float2(width, height) * 2.0f - 1.0f);
 
     // Get a ray for the UVs
     Ray ray = CreateCameraRay(uv);
 
-    // Trace and shade
-    float3 result = float3(0, 0, 0);
-    for (int i = 0; i < 8; i++){
-        RayHit hit = Trace(ray);
-        result += ray.energy * Shade(ray, hit);
-
-        if (!any(ray.energy))
-        break;
-    }
+    float3 result = float3(0.0f,0.0f,0.0f); 
+    RayHit hit = Trace(ray);
+    result = Shade(ray,hit);
 
     Result[id.xy] = float4(result, 1.0f);
 }
