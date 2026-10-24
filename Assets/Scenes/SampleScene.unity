@@ -323,16 +323,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b958e99db4755244e8f513f73a3f9b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RayTracingMaster
-  RayTracingShader: {fileID: 7200000, guid: 01a43a99c65c49646bd62d0d15e0f243, type: 3}
-  SkyboxTexture: {fileID: 2800000, guid: 78830a6ed9ffb704e806573319b19749, type: 3}
-  _DirectionalLight: {fileID: 705507994}
-  _currentSample: 0
-  _addMaterial: {fileID: 0}
-  _target: {fileID: 0}
-  _camera: {fileID: 0}
-  SphereRadius: {x: 3, y: 8}
-  SpheresMax: 100
-  SpherePlacementRadius: 100
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -360,6 +350,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7c3f705a35bad64db1a95e79a6a73e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RayTracingSystem
+  RayTracingShader: {fileID: 7200000, guid: 01a43a99c65c49646bd62d0d15e0f243, type: 3}
+  SkyboxTexture: {fileID: 2800000, guid: 78830a6ed9ffb704e806573319b19749, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
