@@ -28,6 +28,7 @@ static const float PI = 3.14159265f;
 struct Ray {
     float3 origin;
     float3 direction;
+    float3 energy;
 };
 
 struct RayHit {
@@ -41,6 +42,7 @@ Ray CreateRay(float3 origin, float3 direction){
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
+    ray.energy = float3(1.0f,1.0f,1.0f);
     return ray;
 }
 
@@ -113,10 +115,21 @@ RayHit Trace(Ray ray){
 
 float3 Shade(inout Ray ray, RayHit hit){
     if (hit.didHit){
-        //  Red color for testing
-        return float3(1.0f,0.0f,0.0f);
+        ray.origin = hit.position+hit.normal * 0.001F;
+        ray.direction = reflect(ray.direction, hit.normal);
+        ray.energy *= float3(0.6F,0.6F,0.6F); // SPECULAR
+
+        // Fake light dir
+        float3 lightDir = normalize(float3(0.5f, 1.0f, -0.5f));
+        
+        float diffuse = max(0.0f, dot(hit.normal, lightDir));
+        float3 albedo = float3(0.2f, 0.6f, 1.0f);
+        float3 ambient = float3(0.1f, 0.1f, 0.1f);
+
+        return albedo * (diffuse + ambient);
     } else {
         // Sample the skybox and write it
+        ray.energy = 0.0f;
         float theta = acos(ray.direction.y) / -PI;
         float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
         return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2(phi, theta), 0).xyz;
@@ -124,9 +137,8 @@ float3 Shade(inout Ray ray, RayHit hit){
 }
 
 [numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
-{
-    // Get the dimensions of the RenderTexture
+void CSMain (uint3 id : SV_DispatchThreadID){
+    // Get the dimensions of the RenderTexture  
     uint width, height;
     Result.GetDimensions(width, height);
 
@@ -136,9 +148,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     // Get a ray for the UVs
     Ray ray = CreateCameraRay(uv);
 
-    float3 result = float3(0.0f,0.0f,0.0f); 
-    RayHit hit = Trace(ray);
-    result = Shade(ray,hit);
+    // Trace and Shade
+    float3 result = float3(0.0f,0.0f,0.0f);
+    for (int i = 0; i < 8; i++){
+        RayHit hit = Trace(ray);
+        result += ray.energy*Shade(ray,hit);
 
+        if (!any(ray.energy))
+        break;
+    }
+
+    // Output color 
     Result[id.xy] = float4(result, 1.0f);
 }
