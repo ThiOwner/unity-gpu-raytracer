@@ -1,4 +1,6 @@
 using UnityEngine;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 public class RayTracingSystem : MonoBehaviour {
     
@@ -10,7 +12,9 @@ public class RayTracingSystem : MonoBehaviour {
     struct Triangle {
         public int i0, i1, i2;
     }
-    
+
+    [SerializeField] private SceneMeshExtractor extractorInstance;
+
     public ComputeShader RayTracingShader;
     public Texture SkyboxTexture;
 
@@ -23,6 +27,9 @@ public class RayTracingSystem : MonoBehaviour {
     private ComputeBuffer _triangleBuffer;
 
     private void OnEnable(){
+        if (SceneMeshExtractor.Instance != null){
+            extractorInstance = SceneMeshExtractor.Instance;
+        }
         SetUpScene();
     }
 
@@ -31,37 +38,58 @@ public class RayTracingSystem : MonoBehaviour {
         if (_triangleBuffer != null) _triangleBuffer.Release();
     }
 
-    private void Awake() {
+    private void Awake(){
         _camera = GetComponent<Camera>();
     }
 
-    private void Update() {
+    private void Update(){
         if(transform.hasChanged){
             _currentSample = 0;
             transform.hasChanged = false;
         }
     }
 
+    // Serialize scene and setting up vertrices and triangles ComputerBuffer
     private void SetUpScene(){
         if (_vertexBuffer != null) _vertexBuffer.Release();
         if (_triangleBuffer != null) _triangleBuffer.Release();
 
-        // Hello Triangle
-        Vertex[] vertices = {
-            new Vertex { position = new Vector3(-1f, -1f, 5f), normal = Vector3.back },
-            new Vertex { position = new Vector3( 0f,  1f, 5f), normal = Vector3.back },
-            new Vertex { position = new Vector3( 1f, -1f, 5f), normal = Vector3.back },
-        };
+        List<Vertex> verticesList = new List<Vertex>();
+        List<Triangle> trianglesList = new List<Triangle>();
+        List<SceneMeshExtractor.ExtractedMeshData> extractedData = extractorInstance.ExtractAllMeshesInActiveScene(); 
 
-        Triangle[] triangles = {
-            new Triangle { i0 = 0, i1 = 1, i2 = 2 },
-        };
+        int vertexOffset = 0;
 
-        _vertexBuffer = new ComputeBuffer(vertices.Length, sizeof(float) * 6);
-        _vertexBuffer.SetData(vertices);
+        foreach (SceneMeshExtractor.ExtractedMeshData data in extractedData){
+            for (int i = 0; i < data.worldVertices.Length; i++){
+                verticesList.Add(new Vertex{
+                    position = data.worldVertices[i],
+                    normal = data.worldNormals[i]
+                });
+            }
+            for (int j = 0; j < data.triangles.Length; j += 3){
+                trianglesList.Add(new Triangle{
+                    i0 = data.triangles[j] + vertexOffset,
+                    i1 = data.triangles[j + 1] + vertexOffset,
+                    i2 = data.triangles[j + 2] + vertexOffset
+                });
+            }
+            vertexOffset += data.worldVertices.Length;
+        }
 
-        _triangleBuffer = new ComputeBuffer(triangles.Length, sizeof(int) * 3);
-        _triangleBuffer.SetData(triangles);
+        if (verticesList.Count == 0 || trianglesList.Count == 0){
+            Debug.LogWarning("[SetUpScene] The scene is empty");
+            return;
+        }
+
+        int vertexStride = Marshal.SizeOf<Vertex>();
+        int triangleStride = Marshal.SizeOf<Triangle>();
+
+        _vertexBuffer = new ComputeBuffer(verticesList.Count, vertexStride);
+        _vertexBuffer.SetData(verticesList);
+
+        _triangleBuffer = new ComputeBuffer(trianglesList.Count, triangleStride);
+        _triangleBuffer.SetData(trianglesList);
     }
 
     private void SetShaderParameters(){
